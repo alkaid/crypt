@@ -8,7 +8,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	go.etcd.io/etcd/api/v3 v3.5.7
 	go.etcd.io/etcd/client/v2 v2.305.7
-	go.etcd.io/etcd/client/v3 v3.5.6
+	go.etcd.io/etcd/client/v3 v3.5.7
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 	google.golang.org/api v0.109.0
 	google.golang.org/grpc v1.52.3
