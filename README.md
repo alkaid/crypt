@@ -1,6 +1,5 @@
 # crypt
 
-**This is a maintained fork of the [fork](https://github.com/bketelsen/crypt) of the abandoned [original](https://github.com/xordataexchange/crypt)**
+**This is a maintained fork of the [fork](https://github.com/sagikazarmark/crypt) of the abandoned [original](https://github.com/xordataexchange/crypt)**
 
-This fork serves the purposes of [Viper](https://github.com/spf13/viper) providing a way to access remote key-value stores.
-
+为了解决 etcd v3 client watch 异常时 select io 跑死 cpu 的问题
