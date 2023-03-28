@@ -1,4 +1,4 @@
-module github.com/sagikazarmark/crypt
+module github.com/alkaid/crypt
 
 go 1.19
 

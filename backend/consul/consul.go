@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alkaid/crypt/backend"
 	"github.com/hashicorp/consul/api"
-	"github.com/sagikazarmark/crypt/backend"
 )
 
 type Client struct {
