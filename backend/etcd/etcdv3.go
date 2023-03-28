@@ -3,16 +3,18 @@ package etcd
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/sagikazarmark/crypt/backend"
-	"go.etcd.io/etcd/api/v3/mvccpb"
-	goetcdv3 "go.etcd.io/etcd/client/v3"
+
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/sagikazarmark/crypt/backend"
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	goetcdv3 "go.etcd.io/etcd/client/v3"
 )
 
 type ClientV3 struct {
@@ -109,23 +111,37 @@ func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 	}()
 	go func() {
 		wch := c.client.Watch(cctx, key, goetcdv3.WithPrevKV())
+		log("info", fmt.Sprintf("started watch %s", key))
 		for {
 			select {
-			case we := <-wch:
+			case we, ok := <-wch:
+				if we.Err() != nil {
+					log("warn", "etcd watcher response error")
+					time.Sleep(100 * time.Millisecond)
+				}
+				if !ok {
+					// 可能上层关闭了watcher或client,也可能某些异常引发的watch.run()退出了,须由上层处理.上层判断respChan是否关闭即可.
+					log("error", "etcd watcher died, maybe watcher or client closed")
+					close(respChan)
+					return
+				}
 				for _, ev := range we.Events {
 					switch ev.Type {
 					case mvccpb.PUT:
 						respChan <- &backend.Response{Value: ev.Kv.Value}
 					case mvccpb.DELETE:
-						//do nothing with delete event
-						fmt.Println("find DETELE:", ev.PrevKv.Key, ev.PrevKv.Value)
+						// do nothing with delete event
 					}
 				}
 			case <-cctx.Done():
-				fmt.Println("stop watch")
+				log("info", "stop watch")
 				return
 			}
 		}
 	}()
 	return respChan
+}
+
+func log(level string, msg string) {
+	fmt.Printf("{\"level\":\"%s\",\"ts\":%d,\"pkg\":\"alkaid/crypt\",\"msg\":\"%s\"}\n", level, time.Now().UnixNano(), msg)
 }
