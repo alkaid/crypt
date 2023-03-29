@@ -22,6 +22,7 @@ type ClientV3 struct {
 	timeout time.Duration
 	client  *goetcdv3.Client
 	keysAPI goetcdv3.KV
+	key     string
 }
 
 var CliTimeoutKey = "ETCDV3_CLI_TIMEOUT_SECOND"
@@ -51,7 +52,7 @@ func NewV3(machines []string) (*ClientV3, error) {
 				}
 				timeout = time.Duration(tmi) * time.Second
 			}
-			c := &ClientV3{client: newClient, keysAPI: keysAPI, ctx: context.Background(), timeout: timeout}
+			c := &ClientV3{client: newClient, key: key, keysAPI: keysAPI, ctx: context.Background(), timeout: timeout}
 			oneclim[key] = c
 			return c, nil
 		} else {
@@ -115,15 +116,18 @@ func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 		for {
 			select {
 			case we, ok := <-wch:
-				if we.Err() != nil {
-					log("warn", "etcd watcher response error")
-					time.Sleep(100 * time.Millisecond)
+				if err := we.Err(); err != nil {
+					log("warn", "etcd watcher response error:"+err.Error())
+					respChan <- &backend.Response{Error: err}
+					// 关闭client并删除
+					c.Close()
+					break
 				}
 				if !ok {
-					// 可能上层关闭了watcher或client,也可能某些异常引发的watch.run()退出了,须由上层处理.上层判断respChan是否关闭即可.
+					// 可能上层关闭了watcher或client,也可能某些异常(会先收到we.Err())引发的watch.run()退出了,非传入的 stop channel 退出的,认为是异常,应当重试.
 					log("error", "etcd watcher died, maybe watcher or client closed")
 					close(respChan)
-					return
+					break
 				}
 				for _, ev := range we.Events {
 					switch ev.Type {
@@ -134,12 +138,25 @@ func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 					}
 				}
 			case <-cctx.Done():
-				log("info", "stop watch")
-				return
+				log("info", "etcd watcher canceled")
+				break
 			}
 		}
+		// release context
+		cancelFunc()
 	}()
 	return respChan
+}
+
+func (c *ClientV3) Close() error {
+	mu.Lock()
+	defer mu.Unlock()
+	err := c.client.Close()
+	delete(oneclim, c.key)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func log(level string, msg string) {
