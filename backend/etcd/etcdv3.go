@@ -22,6 +22,7 @@ type ClientV3 struct {
 	timeout time.Duration
 	client  *goetcdv3.Client
 	keysAPI goetcdv3.KV
+	key     string
 }
 
 var CliTimeoutKey = "ETCDV3_CLI_TIMEOUT_SECOND"
@@ -51,7 +52,7 @@ func NewV3(machines []string) (*ClientV3, error) {
 				}
 				timeout = time.Duration(tmi) * time.Second
 			}
-			c := &ClientV3{client: newClient, keysAPI: keysAPI, ctx: context.Background(), timeout: timeout}
+			c := &ClientV3{client: newClient, key: key, keysAPI: keysAPI, ctx: context.Background(), timeout: timeout}
 			oneclim[key] = c
 			return c, nil
 		} else {
@@ -105,24 +106,32 @@ func (c *ClientV3) Set(key string, value []byte) error {
 func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 	respChan := make(chan *backend.Response, 0)
 	cctx, cancelFunc := context.WithCancel(c.ctx)
+	// 这里要靠调用方close(stop)来避免goroutine泄漏,TODO 更好的方式是使用传入CancelContext来控制退出,这里受限于接口定义,不好改动
 	go func() {
 		<-stop
 		cancelFunc()
 	}()
 	go func() {
+		defer func() {
+			close(respChan)
+			// release context
+			cancelFunc()
+		}()
 		wch := c.client.Watch(cctx, key, goetcdv3.WithPrevKV())
-		log("info", fmt.Sprintf("started watch %s", key))
+		log("info", fmt.Sprintf("etcd watcher started %s", key))
 		for {
 			select {
 			case we, ok := <-wch:
-				if we.Err() != nil {
-					log("warn", "etcd watcher response error")
-					time.Sleep(100 * time.Millisecond)
+				if err := we.Err(); err != nil {
+					log("warn", "etcd watcher response error:"+err.Error())
+					// 关闭client并删除
+					c.Close()
+					respChan <- &backend.Response{Error: err}
+					return
 				}
 				if !ok {
-					// 可能上层关闭了watcher或client,也可能某些异常引发的watch.run()退出了,须由上层处理.上层判断respChan是否关闭即可.
-					log("error", "etcd watcher died, maybe watcher or client closed")
-					close(respChan)
+					// 可能上层关闭了watcher或client,也可能某些异常(会先收到we.Err())引发的watch.run()退出了,非传入的 stop channel 退出的,认为是异常,应当重试.
+					log("warn", "etcd watcher died, maybe watcher or client closed")
 					return
 				}
 				for _, ev := range we.Events {
@@ -134,12 +143,23 @@ func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 					}
 				}
 			case <-cctx.Done():
-				log("info", "stop watch")
+				log("info", fmt.Sprintf("etcd watcher canceled %s", key))
 				return
 			}
 		}
 	}()
 	return respChan
+}
+
+func (c *ClientV3) Close() error {
+	mu.Lock()
+	defer mu.Unlock()
+	err := c.client.Close()
+	delete(oneclim, c.key)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func log(level string, msg string) {
