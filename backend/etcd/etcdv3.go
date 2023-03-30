@@ -123,7 +123,7 @@ func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 			select {
 			case we, ok := <-wch:
 				if err := we.Err(); err != nil {
-					log("warn", "etcd watcher response error:"+err.Error())
+					log("warn", "etcd watcher response error:"+err.Error()+" key="+key)
 					// 关闭client并删除
 					c.Close()
 					respChan <- &backend.Response{Error: err}
@@ -131,7 +131,7 @@ func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 				}
 				if !ok {
 					// 可能上层关闭了watcher或client,也可能某些异常(会先收到we.Err())引发的watch.run()退出了,非传入的 stop channel 退出的,认为是异常,应当重试.
-					log("warn", "etcd watcher died, maybe watcher or client closed")
+					log("warn", "etcd watcher died, maybe watcher or client closed"+" key="+key)
 					return
 				}
 				for _, ev := range we.Events {

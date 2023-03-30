@@ -201,13 +201,19 @@ type Response struct {
 
 func (c configManager) Watch(key string, stop chan bool) <-chan *Response {
 	resp := make(chan *Response, 0)
-	backendResp := c.store.Watch(key, stop)
+	quit := make(chan bool)
+	backendResp := c.store.Watch(key, quit)
 	go func() {
+		defer close(quit)
 		for {
 			select {
 			case <-stop:
+				quit <- true
 				return
-			case r := <-backendResp:
+			case r, ok := <-backendResp:
+				if !ok {
+					return
+				}
 				if r.Error != nil {
 					resp <- &Response{nil, r.Error}
 					continue
@@ -222,13 +228,19 @@ func (c configManager) Watch(key string, stop chan bool) <-chan *Response {
 
 func (c standardConfigManager) Watch(key string, stop chan bool) <-chan *Response {
 	resp := make(chan *Response, 0)
-	backendResp := c.store.Watch(key, stop)
+	quit := make(chan bool)
+	backendResp := c.store.Watch(key, quit)
 	go func() {
+		defer close(quit)
 		for {
 			select {
 			case <-stop:
+				quit <- true
 				return
-			case r := <-backendResp:
+			case r, ok := <-backendResp:
+				if !ok {
+					return
+				}
 				if r.Error != nil {
 					resp <- &Response{nil, r.Error}
 					continue
