@@ -9,6 +9,7 @@ import (
 	"github.com/sagikazarmark/crypt/backend/consul"
 	"github.com/sagikazarmark/crypt/backend/etcd"
 	"github.com/sagikazarmark/crypt/backend/firestore"
+	"github.com/sagikazarmark/crypt/backend/natskv"
 	"github.com/sagikazarmark/crypt/encoding/secconf"
 )
 
@@ -85,6 +86,15 @@ func NewStandardConsulConfigManager(machines []string) (ConfigManager, error) {
 	return NewStandardConfigManager(store)
 }
 
+// NewStandardNatsConfigManager returns a new ConfigManager backed by NATS.
+func NewStandardNatsConfigManager(machines []string) (ConfigManager, error) {
+	store, err := natskv.New(machines)
+	if err != nil {
+		return nil, err
+	}
+	return NewStandardConfigManager(store)
+}
+
 // NewFirestoreConfigManager returns a new ConfigManager backed by Firestore.
 // Data will be encrypted.
 func NewFirestoreConfigManager(machines []string, keystore io.Reader) (ConfigManager, error) {
@@ -119,6 +129,16 @@ func NewEtcdV3ConfigManager(machines []string, keystore io.Reader) (ConfigManage
 // Data will be encrypted.
 func NewConsulConfigManager(machines []string, keystore io.Reader) (ConfigManager, error) {
 	store, err := consul.New(machines)
+	if err != nil {
+		return nil, err
+	}
+	return NewConfigManager(store, keystore)
+}
+
+// NewNatsConfigManager returns a new ConfigManager backed by NATS.
+// Data will be encrypted.
+func NewNatsConfigManager(machines []string, keystore io.Reader) (ConfigManager, error) {
+	store, err := natskv.New(machines)
 	if err != nil {
 		return nil, err
 	}
