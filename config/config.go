@@ -11,6 +11,8 @@ import (
 	"github.com/sagikazarmark/crypt/backend/firestore"
 	"github.com/sagikazarmark/crypt/backend/natskv"
 	"github.com/sagikazarmark/crypt/encoding/secconf"
+	goetcdv2 "go.etcd.io/etcd/client/v2"
+	goetcdv3 "go.etcd.io/etcd/client/v3"
 )
 
 type KVPair struct {
@@ -59,7 +61,13 @@ func NewStandardFirestoreConfigManager(machines []string) (ConfigManager, error)
 
 // NewStandardEtcdConfigManager returns a new ConfigManager backed by etcd.
 func NewStandardEtcdConfigManager(machines []string) (ConfigManager, error) {
-	store, err := etcd.New(machines)
+	return NewStandardEtcdConfigManagerFromConfig(goetcdv2.Config{
+		Endpoints: machines,
+	})
+}
+// NewStandardEtcdConfigManagerFromConfig returns a new ConfigManager backed by etcd.
+func NewStandardEtcdConfigManagerFromConfig(config goetcdv2.Config) (ConfigManager, error) {
+	store, err := etcd.NewFromV2Config(config)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +77,14 @@ func NewStandardEtcdConfigManager(machines []string) (ConfigManager, error) {
 
 // NewStandardEtcdV3ConfigManager returns a new ConfigManager backed by etcdv3.
 func NewStandardEtcdV3ConfigManager(machines []string) (ConfigManager, error) {
-	store, err := etcd.NewV3(machines)
+	return NewStandardEtcdV3ConfigManagerFromConfig(goetcdv3.Config{
+		Endpoints: machines,
+	})
+}
+
+// NewStandardEtcdV3ConfigManagerFromConfig returns a new ConfigManager backed by etcdv3.
+func NewStandardEtcdV3ConfigManagerFromConfig(config goetcdv3.Config) (ConfigManager, error) {
+	store, err := etcd.NewFromV3Config(config)
 	if err != nil {
 		return nil, err
 	}

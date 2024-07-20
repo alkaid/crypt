@@ -18,9 +18,13 @@ type Client struct {
 }
 
 func New(machines []string) (*Client, error) {
-	newClient, err := goetcd.New(goetcd.Config{
+	return NewFromV2Config(goetcd.Config{
 		Endpoints: machines,
 	})
+}
+
+func NewFromV2Config(config goetcd.Config) (*Client, error) {
+	newClient, err := goetcd.New(config)
 	if err != nil {
 		return nil, fmt.Errorf("creating new etcd client for crypt.backend.Client: %v", err)
 	}

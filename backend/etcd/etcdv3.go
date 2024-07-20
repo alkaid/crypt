@@ -3,16 +3,17 @@ package etcd
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/sagikazarmark/crypt/backend"
-	"go.etcd.io/etcd/api/v3/mvccpb"
-	goetcdv3 "go.etcd.io/etcd/client/v3"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/sagikazarmark/crypt/backend"
+	"go.etcd.io/etcd/api/v3/mvccpb"
+	goetcdv3 "go.etcd.io/etcd/client/v3"
 )
 
 type ClientV3 struct {
@@ -27,15 +28,20 @@ var oneclim = map[string]*ClientV3{}
 var mu sync.Mutex
 
 func NewV3(machines []string) (*ClientV3, error) {
+	return NewFromV3Config(goetcdv3.Config{
+		Endpoints: machines,
+	})
+}
+
+func NewFromV3Config(config goetcdv3.Config) (*ClientV3, error) {
+	machines := config.Endpoints
 	sort.Strings(machines)
 	key := strings.Join(machines, ",")
 	if cli, ok := oneclim[key]; !ok {
 		mu.Lock()
 		defer mu.Unlock()
 		if cli2, ok2 := oneclim[key]; !ok2 {
-			newClient, err := goetcdv3.New(goetcdv3.Config{
-				Endpoints: machines,
-			})
+			newClient, err := goetcdv3.New(config)
 			if err != nil {
 				return nil, fmt.Errorf("creating new etcd client for crypt.backend.Client: %v", err)
 			}
