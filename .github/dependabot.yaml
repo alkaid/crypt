@@ -5,6 +5,10 @@ updates:
     directory: /
     schedule:
       interval: daily
+    groups:
+      etcd:
+        patterns:
+          - "go.etcd.io/*"
 
   - package-ecosystem: github-actions
     directory: /
