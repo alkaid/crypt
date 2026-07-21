@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/sagikazarmark/crypt/backend"
+	"github.com/alkaid/crypt/backend"
 )
 
 type Client struct {
