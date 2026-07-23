@@ -68,11 +68,11 @@ func (c *Client) Watch(key string, stop chan bool) <-chan *backend.Response {
 		for {
 			b, err := c.Get(key)
 			if err != nil {
-				respChan <- &backend.Response{nil, err}
+				respChan <- &backend.Response{Error: err}
 				time.Sleep(time.Second * 5)
 				continue
 			}
-			respChan <- &backend.Response{b, nil}
+			respChan <- &backend.Response{Value: b}
 		}
 	}()
 	return respChan

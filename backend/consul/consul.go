@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/consul/api"
 	"github.com/alkaid/crypt/backend"
+	"github.com/hashicorp/consul/api"
 )
 
 type Client struct {
@@ -74,12 +74,12 @@ func (c *Client) Watch(key string, stop chan bool) <-chan *backend.Response {
 				err = fmt.Errorf("Key ( %s ) was not found.", key)
 			}
 			if err != nil {
-				respChan <- &backend.Response{nil, err}
+				respChan <- &backend.Response{Error: err}
 				time.Sleep(time.Second * 5)
 				continue
 			}
 			c.waitIndex = meta.LastIndex
-			respChan <- &backend.Response{keypair.Value, nil}
+			respChan <- &backend.Response{Value: keypair.Value}
 		}
 	}()
 	return respChan

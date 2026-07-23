@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/alkaid/crypt/backend"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	goetcdv3 "go.etcd.io/etcd/client/v3"
 )
@@ -19,9 +19,14 @@ import (
 type ClientV3 struct {
 	ctx     context.Context
 	timeout time.Duration
-	client  *goetcdv3.Client
+	client  clientV3
 	keysAPI goetcdv3.KV
 	key     string
+}
+
+type clientV3 interface {
+	Watch(context.Context, string, ...goetcdv3.OpOption) goetcdv3.WatchChan
+	Close() error
 }
 
 var CliTimeoutKey = "ETCDV3_CLI_TIMEOUT_SECOND"
@@ -112,8 +117,11 @@ func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 	cctx, cancelFunc := context.WithCancel(c.ctx)
 	// 这里要靠调用方close(stop)来避免goroutine泄漏,TODO 更好的方式是使用传入CancelContext来控制退出,这里受限于接口定义,不好改动
 	go func() {
-		<-stop
-		cancelFunc()
+		select {
+		case <-stop:
+			cancelFunc()
+		case <-cctx.Done():
+		}
 	}()
 	go func() {
 		defer func() {
@@ -128,9 +136,10 @@ func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 			case we, ok := <-wch:
 				if err := we.Err(); err != nil {
 					log("warn", "etcd watcher response error:"+err.Error()+" key="+key)
-					// 关闭client并删除
-					c.Close()
-					respChan <- &backend.Response{Error: err}
+					select {
+					case respChan <- &backend.Response{Error: err}:
+					case <-cctx.Done():
+					}
 					return
 				}
 				if !ok {
@@ -141,7 +150,11 @@ func (c *ClientV3) Watch(key string, stop chan bool) <-chan *backend.Response {
 				for _, ev := range we.Events {
 					switch ev.Type {
 					case mvccpb.PUT:
-						respChan <- &backend.Response{Value: ev.Kv.Value}
+						select {
+						case respChan <- &backend.Response{Value: ev.Kv.Value}:
+						case <-cctx.Done():
+							return
+						}
 					case mvccpb.DELETE:
 						// do nothing with delete event
 					}

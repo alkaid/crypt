@@ -236,27 +236,40 @@ type Response struct {
 	Error error
 }
 
+func sendResponse(resp chan<- *Response, stop <-chan bool, value *Response) bool {
+	select {
+	case resp <- value:
+		return true
+	case <-stop:
+		return false
+	}
+}
+
 func (c configManager) Watch(key string, stop chan bool) <-chan *Response {
 	resp := make(chan *Response, 0)
 	quit := make(chan bool)
 	backendResp := c.store.Watch(key, quit)
 	go func() {
+		defer close(resp)
 		defer close(quit)
 		for {
 			select {
 			case <-stop:
-				quit <- true
 				return
 			case r, ok := <-backendResp:
 				if !ok {
 					return
 				}
 				if r.Error != nil {
-					resp <- &Response{nil, r.Error}
+					if !sendResponse(resp, stop, &Response{nil, r.Error}) {
+						return
+					}
 					continue
 				}
 				value, err := secconf.Decode(r.Value, bytes.NewBuffer(c.keystore))
-				resp <- &Response{value, err}
+				if !sendResponse(resp, stop, &Response{value, err}) {
+					return
+				}
 			}
 		}
 	}()
@@ -268,21 +281,25 @@ func (c standardConfigManager) Watch(key string, stop chan bool) <-chan *Respons
 	quit := make(chan bool)
 	backendResp := c.store.Watch(key, quit)
 	go func() {
+		defer close(resp)
 		defer close(quit)
 		for {
 			select {
 			case <-stop:
-				quit <- true
 				return
 			case r, ok := <-backendResp:
 				if !ok {
 					return
 				}
 				if r.Error != nil {
-					resp <- &Response{nil, r.Error}
+					if !sendResponse(resp, stop, &Response{nil, r.Error}) {
+						return
+					}
 					continue
 				}
-				resp <- &Response{r.Value, nil}
+				if !sendResponse(resp, stop, &Response{r.Value, nil}) {
+					return
+				}
 			}
 		}
 	}()

@@ -2,9 +2,12 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/alkaid/crypt/backend"
 	"github.com/alkaid/crypt/backend/mock"
 )
 
@@ -317,5 +320,87 @@ func Test_Watch_BasePath(t *testing.T) {
 		if r.Error != nil {
 			t.Errorf("Error watching value: %s\n", r.Error.Error())
 		}
+	}
+}
+
+type watchStore struct {
+	responses <-chan *backend.Response
+	quit      chan bool
+}
+
+func (s *watchStore) Get(string) ([]byte, error) {
+	return nil, nil
+}
+
+func (s *watchStore) List(string) (backend.KVPairs, error) {
+	return nil, nil
+}
+
+func (s *watchStore) Set(string, []byte) error {
+	return nil
+}
+
+func (s *watchStore) Watch(_ string, stop chan bool) <-chan *backend.Response {
+	s.quit = stop
+	return s.responses
+}
+
+func watchManagers() map[string]func(backend.Store) ConfigManager {
+	return map[string]func(backend.Store) ConfigManager{
+		"encrypted": func(store backend.Store) ConfigManager {
+			return configManager{store: store}
+		},
+		"standard": func(store backend.Store) ConfigManager {
+			return standardConfigManager{store: store}
+		},
+	}
+}
+
+func TestWatchClosesResponseWhenBackendStreamEnds(t *testing.T) {
+	for name, newManager := range watchManagers() {
+		t.Run(name, func(t *testing.T) {
+			backendResponses := make(chan *backend.Response)
+			store := &watchStore{responses: backendResponses}
+			responses := newManager(store).Watch("key", make(chan bool))
+
+			close(backendResponses)
+			assertChannelClosed(t, responses, "public response")
+			assertChannelClosed(t, store.quit, "backend stop")
+		})
+	}
+}
+
+func TestWatchCancellationInterruptsBlockedResponse(t *testing.T) {
+	for name, newManager := range watchManagers() {
+		t.Run(name, func(t *testing.T) {
+			backendResponses := make(chan *backend.Response)
+			store := &watchStore{responses: backendResponses}
+			stop := make(chan bool)
+			responses := newManager(store).Watch("key", stop)
+			responseReceived := make(chan struct{})
+
+			go func() {
+				backendResponses <- &backend.Response{Error: errors.New("watch failed")}
+				close(responseReceived)
+			}()
+
+			assertChannelClosed(t, responseReceived, "backend response handoff")
+			close(stop)
+			assertChannelClosed(t, store.quit, "backend stop")
+			assertChannelClosed(t, responses, "public response")
+		})
+	}
+}
+
+func assertChannelClosed[T any](t *testing.T, channel <-chan T, name string) {
+	t.Helper()
+
+	select {
+	case _, ok := <-channel:
+		if ok {
+			t.Fatalf("%s channel sent an unexpected value", name)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for %s channel to close", name)
 	}
 }

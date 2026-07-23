@@ -107,7 +107,7 @@ func (c *Client) WatchWithContext(ctx context.Context, path string, stop chan bo
 				if err == nil {
 					err = snap.DataTo(&v)
 				}
-				ch <- &backend.Response{v.Data, err}
+				ch <- &backend.Response{Value: v.Data, Error: err}
 				if err != nil {
 					time.Sleep(time.Second * 5)
 				}

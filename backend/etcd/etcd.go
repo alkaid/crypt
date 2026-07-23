@@ -108,7 +108,7 @@ func (c *Client) WatchWithContext(ctx context.Context, key string, stop chan boo
 			// resp, err = c.client.Watch(key, c.waitIndex+1, false, nil, stop)
 			resp, err = watcher.Next(ctx)
 			if err != nil {
-				respChan <- &backend.Response{nil, err}
+				respChan <- &backend.Response{Error: err}
 				if errors.Is(err, context.Canceled) {
 					return
 				}
@@ -116,7 +116,7 @@ func (c *Client) WatchWithContext(ctx context.Context, key string, stop chan boo
 				continue
 			}
 			c.waitIndex = resp.Node.ModifiedIndex
-			respChan <- &backend.Response{[]byte(resp.Node.Value), nil}
+			respChan <- &backend.Response{Value: []byte(resp.Node.Value)}
 		}
 	}()
 	return respChan

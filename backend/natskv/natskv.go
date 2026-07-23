@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/alkaid/crypt/backend"
+	"github.com/nats-io/nats.go"
 )
 
 type Client struct {
@@ -111,12 +111,12 @@ func (c *Client) WatchWithContext(ctx context.Context, key string, stop chan boo
 
 	kv, err := c.js.KeyValue(c.bucket)
 	if err != nil {
-		ch <- &backend.Response{nil, err}
+		ch <- &backend.Response{Error: err}
 	}
 
 	watch, err := kv.Watch(key)
 	if err != nil {
-		ch <- &backend.Response{nil, err}
+		ch <- &backend.Response{Error: err}
 	}
 
 	go func() {
